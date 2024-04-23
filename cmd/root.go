@@ -1,30 +1,27 @@
 /*
 Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/likexian/whois"
+	whoisparser "github.com/likexian/whois-parser"
 	"github.com/spf13/cobra"
 )
-
-
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "whoare",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Short: "Look up a domain name's official name servers and query these for information",
+	Run:   lookup,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -37,15 +34,35 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.whoare.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().StringP("domain", "n", "", "The domain to investigate")
+	rootCmd.MarkFlagRequired("domain")
 }
 
+func lookup(cmd *cobra.Command, args []string) {
+	domain, _ := cmd.Flags().GetString("domain")
 
+	whois_raw, err := whois.Whois(domain)
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
+	result, err := whoisparser.Parse(whois_raw)
+
+	slog.Info("Got Whois information", "domain", domain)
+	for _, ns := range result.Domain.NameServers {
+
+		r := &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{
+					Timeout: time.Millisecond * time.Duration(10000),
+				}
+				return d.DialContext(ctx, network, fmt.Sprintf("%s:53", ns))
+			},
+		}
+		ip, _ := r.LookupHost(context.Background(), domain)
+
+		slog.Info("Resolution", "domain", domain, "NS", ns, "A", strings.Join(ip, ", "))
+	}
+}
