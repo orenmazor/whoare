@@ -41,22 +41,22 @@ func init() {
 func lookup(cmd *cobra.Command, args []string) {
 	domain, _ := cmd.Flags().GetString("domain")
 
-	whois_raw, err := whois.Whois(domain)
+	whois_raw, err := whois.Whois(domain, "whois.iana.org")
 	if err != nil {
 		slog.Error(err.Error())
 		return
 	}
 
+	slog.Info("Got Whois information", "domain", domain)
 	result, err := whoisparser.Parse(whois_raw)
 
-	slog.Info("Got Whois information", "domain", domain)
 	for _, ns := range result.Domain.NameServers {
 
 		r := &net.Resolver{
 			PreferGo: true,
 			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 				d := net.Dialer{
-					Timeout: time.Millisecond * time.Duration(10000),
+					Timeout: time.Millisecond * time.Duration(30000),
 				}
 				return d.DialContext(ctx, network, fmt.Sprintf("%s:53", ns))
 			},
