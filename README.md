@@ -1,6 +1,6 @@
 # WhoAre
 
-A WhoIs based DNS lookup tool.
+A WhoIs based A record lookup tool.
 
 ![A screenshot of looking up zombo.com](whoare.png)
 
